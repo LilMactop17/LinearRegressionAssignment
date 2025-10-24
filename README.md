@@ -1,15 +1,16 @@
 # Install and Run Project
-## Clone repo
+### Clone repo
 ```console
 git clone https://github.com/LilMactop17/LinearRegressionAssignment.git
 ```
+## In the cloned repo directory
 
-Install Dependencies
+### Install Dependencies
 ```console
 pip install -r requirements.txt
 ```
 
-Run Project
+### Run Project
 ```console
 python src/main.py
 ```

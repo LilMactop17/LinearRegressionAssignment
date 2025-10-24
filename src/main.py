@@ -37,10 +37,11 @@ def eval_and_print(tag, y_true, y_pred, low_thresh=0.75):
     mse = mean_squared_error(y_true, y_pred)
     r2  = r2_score(y_true, y_pred)
     print(f"\n[{tag}] Global:")
-    print(f"Mean Squared Error: {mse}")
-    print(f"R-squared: {r2}")
+    print(f"Mean Squared Error: {mse:.6f}")
+    print(f"R-squared: {r2:.6f}")
 
     low_idx = y_true <= low_thresh
+    #prints r squared values for balanced and unbalanced linear regression
     if np.any(low_idx):
         y_true_low = y_true[low_idx]
         y_pred_low = y_pred[low_idx]
@@ -58,23 +59,23 @@ def eval_and_print(tag, y_true, y_pred, low_thresh=0.75):
     else:
         print(f"\n[{tag}] No test samples with SOH ≤ {low_thresh}.")
 
-# ---------------- Main ----------------
+# Start of commands
 dataset = fetch_dataset()
 x, y = get_values(dataset)
 X_train, X_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42
 )
 
-# Scale once
+# Scale
 X_train = SCALER.fit_transform(X_train)
 X_test  = SCALER.transform(X_test)
 
-# 1) Unbalanced baseline
+# Unbalanced baseline (uses standard linear regression)
 MODEL_base = LinearRegression()
 MODEL_base.fit(X_train, y_train)
 y_pred_base = MODEL_base.predict(X_test)
 
-# 2) Balanced model (your original MODEL)
+# Balanced model (uses weight balancing to more accurately predict SOH scores below 0.75)
 weights_train = np.where(y_train < 0.75, 4.0, 1.0)
 fit_model(X_train, y_train, weights_train)
 y_pred = MODEL.predict(X_test)
@@ -83,7 +84,7 @@ y_pred = MODEL.predict(X_test)
 eval_and_print("UNBALANCED", y_test, y_pred_base, low_thresh=0.75)
 eval_and_print("BALANCED",   y_test, y_pred,      low_thresh=0.75)
 
-# ---- Improvement summary ----
+# Summary of balanced and unbalanced mae, and mse
 low_idx = y_test <= 0.75
 if np.any(low_idx):
     mae_low_base = mean_absolute_error(y_test[low_idx], y_pred_base[low_idx])

@@ -1,0 +1,18 @@
+We chose to create a balanced and un-balanced output for the Linear Regression Model.
+
+We multiplied the importance of experimental SOH values below 0.75 by 4 to make more accurate predictions in critical
+and near critical State of Health regions, while keeping the balanced model to show improvements and deteriorations
+between both regression weightings. Reviewing the dataset showed a minimal amount of SOH values below 0.75 (shown by the
+Count being 20/134), leading us to prioritize those few values as Linear Regression finds coefficients for each X value
+that bring each point as close as possible to the target graph, in this case a Linear graph (ie. X=Y, or 45 degrees).
+Given that most values are in very safe regions, the model would naturally have more data in those regions to get an
+accurate measurement, but the goal is to accurately predict low SOH batteries, which led to the implementation of data
+balancing.
+
+Given the Global results for both the Balanced and Unbalanced models, we found some deteriorations in accuracy, as the
+Mean Squared Error increased, in addition to a decrease in R^2, which represents less accuracy in the model overall.
+However, when evaluating near critical SOH values, there was a 41% improvement in the Mean Squared Error, and a ~2.1
+increase in the low r^2 values, indicating a significant improvement in lower SOH regions. We also incorporated absolute
+errors to test how accurate each prediction is. We implemented the 95th percentile of low SOH values, and the +- range
+of predicted SOH values dropped from ~0.108 to ~0.087, meaning 95% of all low SOH values fell in a closer range to the
+expected graph.

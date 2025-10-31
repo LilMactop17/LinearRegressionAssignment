@@ -14,3 +14,6 @@ pip install -r requirements.txt
 ```console
 python src/main.py
 ```
+
+## Explanations
+To view explanations of the output, go to src/Explanations.txt

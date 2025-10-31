@@ -15,5 +15,10 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
+### How to Access Streamlit
+```console
+python -m streamlit run app.py
+```
+
 ## Explanations
 To view explanations of the output, go to src/Explanations.txt

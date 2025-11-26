@@ -190,10 +190,19 @@ button[kind="secondaryFormSubmit"]:hover {
 st.title("Battery Health Chatbot")
 st.caption("Predict SOH, view your battery’s health, and chat naturally with Gemini.")
 
+#Example Values
+DEFAULT_VALUES = [
+    3.4858, 3.5072, 3.5246, 3.5035, 3.4877,
+    3.4681, 3.4452, 3.4654, 3.4849, 3.5277,
+    3.5599, 3.5187, 3.4889, 3.4530, 3.4009,
+    3.4381, 3.4840, 3.5636, 3.6241, 3.5469
+]
+
+
 # Battery Input
 st.subheader("Enter Cell Voltage Readings")
 cols = st.columns(5)
-user_inputs = [cols[i % 5].number_input(f"U{i+1}", value=3.6, step=0.01, key=f"cell_{i}") for i in range(20)]
+user_inputs = [cols[i % 5].number_input(f"U{i+1}", value=float(DEFAULT_VALUES[i]), step=0.01, key=f"cell_{i}") for i in range(20)]
 
 if st.button("Analyze Battery"):
     try:

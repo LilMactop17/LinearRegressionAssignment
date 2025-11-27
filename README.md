@@ -17,7 +17,7 @@ python src/main.py
 
 ### How to Access Streamlit
 ```console
-python -m streamlit run app.py
+python -m streamlit run src/app.py
 ```
 
 ## Explanations

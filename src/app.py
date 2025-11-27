@@ -3,232 +3,118 @@ import numpy as np
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
-from main import MODEL, SCALER
-
+from main import predict_soh, SCALER, MODEL   
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 GEMINI_MODEL = genai.GenerativeModel("gemini-2.0-flash")
 
-# Initialize chat memory
+
+# Initialize Session State
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+if "last_prompt" not in st.session_state:
+    st.session_state.last_prompt = None
 
-# Predicting the Battery SOH
-def predict_battery_soh(inputs):
-    scaled_input = SCALER.transform([inputs])
-    soh_pred = MODEL.predict(scaled_input)[0]
-    return soh_pred
+if "soh_display" not in st.session_state:
+    st.session_state.soh_display = None
 
 
-# Talking to Gemnini
+# Gemini Chat Function (Stable)
 def ask_gemini(prompt):
-    """Chat with Gemini using limited context (faster)"""
     try:
-        st.session_state.chat_history.append({"role": "user", "parts": [prompt]})
-        context = st.session_state.chat_history[-4:] if len(st.session_state.chat_history) > 4 else st.session_state.chat_history
-
-        with st.spinner("🤖 Thinking..."):
-            response = GEMINI_MODEL.generate_content(context)
-
-        st.session_state.chat_history.append({"role": "model", "parts": [response.text]})
+        context = st.session_state.chat_history[-6:]  # short memory
+        messages = [{"role": role, "parts": [msg]} for role, msg in context]
+        messages.append({"role": "user", "parts": [prompt]})
+        response = GEMINI_MODEL.generate_content(messages)
         return response.text
     except Exception as e:
-        return f"⚠️ Gemini error: {e}"
-
-# Streamlit Page Setup
-st.set_page_config(page_title="Battery SOH Chatbot", page_icon="🔋", layout="centered")
-
-# Styles
-st.markdown("""
-<style>
-
-html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"], [class*="block-container"], [data-testid="stVerticalBlock"] {
-    background-color: #f7f9fc !important;
-    color: #2a2a2a !important;
-}
+        return f"Gemini error: {e}"
 
 
-h1, h2, h3, h4, h5, h6 {
-    color: #5b18d1 !important;
-    text-shadow: 0 0 4px rgba(91, 24, 209, 0.2);
-}
-
-label, p, span, div {
-    color: #333 !important;
-}
-
-            
-[data-testid="stSidebar"], [data-testid="stHeader"] {
-    background-color: #f7f9fc !important;
-}
+# Streamlit UI
+st.title("Battery SOH Analyzer & Chatbot")
+st.write("Enter 20 voltage values (0–1 scale).")
 
 
-.stButton > button {
-    background: linear-gradient(90deg, #6c40ef, #a87fff);
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 0.6em 1.2em;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-.stButton > button:hover {
-    box-shadow: 0 0 10px rgba(108, 64, 239, 0.4);
-    transform: translateY(-2px);
-}
-
-input, textarea, [data-baseweb="input"] > div {
-    background-color: #ffffff !important;
-    color: #333 !important;
-    border: 1px solid #d1d5db !important;
-    border-radius: 8px !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.chatbox {
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 20px;
-    background-color: #ffffff;
-    max-height: 600px;
-    overflow-y: auto;
-    box-shadow: 0 0 8px rgba(0,0,0,0.05);
-}
-.user-bubble {
-    background-color: #6c40ef;
-    color: #fff;
-    border-radius: 12px 12px 0 12px;
-    padding: 10px 14px;
-    margin-bottom: 8px;
-    text-align: right;
-    max-width: 80%;
-    float: right;
-    clear: both;
-}
-.bot-bubble {
-    background-color: #f1f0f6;
-    color: #333;
-    border-radius: 12px 12px 12px 0;
-    padding: 10px 14px;
-    margin-bottom: 8px;
-    text-align: left;
-    max-width: 80%;
-    float: left;
-    clear: both;
-}
-
-[data-testid="stChatInput"] {
-    background: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-}
-
-
-[data-testid="stChatInput"] textarea,
-[data-baseweb="textarea"] textarea,
-div[role="textbox"],
-[data-testid="stChatInputTextArea"] {
-    background-color: #ffffff !important;
-    color: #333 !important;
-    border: 1px solid #d1d5db !important;
-    border-radius: 25px !important;
-    padding: 0.8em 1.2em !important;
-    box-shadow: none !important;
-    outline: none !important;
-}
-
-/* Fix Streamlit’s internal wrappers that create stacked borders */
-[data-testid="stChatInput"] div,
-[data-testid="stChatInput"] iframe,
-[data-testid="stChatInput"] > div > div {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-}
-
-=
-[data-testid="stChatInput"]:focus-within,
-div[role="textbox"]:focus {
-    border-color: #a87fff !important;
-    box-shadow: 0 0 0 3px rgba(168, 127, 255, 0.25) !important;
-}
-
-            
-button[kind="secondaryFormSubmit"] {
-    background: linear-gradient(135deg, #6c40ef, #a87fff);
-    color: white !important;
-    border-radius: 50%;
-    padding: 0.5em 0.7em !important;
-    margin-left: 10px;
-    border: none !important;
-    box-shadow: 0 0 6px rgba(108, 64, 239, 0.4);
-    transition: all 0.25s ease-in-out;
-}
-button[kind="secondaryFormSubmit"]:hover {
-    box-shadow: 0 0 10px rgba(108, 64, 239, 0.6);
-    transform: scale(1.05);
-}
-
-
-.stSuccess, .stError {
-    background-color: #ffffff !important;
-    color: #333 !important;
-    border-radius: 8px !important;
-    border: 1px solid #d1d5db !important;
-    padding: 0.5em 1em !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-# Streamlit Content
-st.title("Battery Health Chatbot")
-st.caption("Predict SOH, view your battery’s health, and chat naturally with Gemini.")
-
-# Battery Input
-st.subheader("Enter Cell Voltage Readings")
 cols = st.columns(5)
-user_inputs = [cols[i % 5].number_input(f"U{i+1}", value=3.6, step=0.01, key=f"cell_{i}") for i in range(20)]
+u_values = []
 
+labels = [f"U{i}" for i in range(1, 21)]
+for idx, label in enumerate(labels):
+    col = cols[idx % 5]
+    value = col.number_input(
+        label,
+        min_value=3.00,
+        max_value=4.20,
+        value=3.60,
+        step=0.01,
+        format="%.2f"
+    )
+    u_values.append(value)
+
+
+# Analyze Battery Button
 if st.button("Analyze Battery"):
     try:
-        soh_pred = predict_battery_soh(user_inputs)
-        avg_msg = f"Predicted SOH: {soh_pred:.2f}"
-        if soh_pred < 0.6:
-            health_msg = "The battery has a problem."
-            prompt = "The battery SOH is low. Suggest ways to improve or manage it."
-        else:
-            health_msg = "The battery is healthy."
-            prompt = "The battery SOH is good. Suggest maintenance tips to keep it healthy."
-
-        st.session_state.chat_history.append({"role": "model", "parts": [f"{avg_msg}\n{health_msg}"]})
-        ask_gemini(prompt)
-        st.success("Battery analysis complete. You can now chat below!")
+        soh = predict_soh(u_values)
+        st.session_state.soh_display = soh
     except Exception as e:
         st.error(f"Prediction error: {e}")
 
-# Chat Interface
-st.subheader("Chat Interface")
 
-st.markdown('<div class="chatbox">', unsafe_allow_html=True)
-for msg in st.session_state.chat_history:
-    if msg["role"] == "user":
-        st.markdown(f'<div class="user-bubble">{msg["parts"][0]}</div>', unsafe_allow_html=True)
+
+# Display SOH Result
+if st.session_state.soh_display is not None:
+    soh = st.session_state.soh_display
+
+    st.markdown("## 🔍 Analysis Result")
+    st.success(f"SOH: {soh:.2f}")
+
+    if soh < 0.75:
+        st.warning("The battery is in critical condition.")
+    elif soh < 0.85:
+        st.info("The battery is moderately worn.")
     else:
-        st.markdown(f'<div class="bot-bubble">{msg["parts"][0]}</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+        st.success("The battery is healthy.")
 
-chat_input = st.chat_input("Type your question or message...")
 
-if chat_input:
-    ask_gemini(chat_input)
-    st.rerun()
+# Chat Interface
+st.markdown("## Chat Interface")
 
-if st.button("Clear Memory"):
-    st.session_state.chat_history.clear()
-    st.success("Chat memory cleared! Start fresh.")
+prompt = st.text_input("Ask a question...")
+
+if st.button("Send") and prompt.strip():
+
+    if prompt != st.session_state.last_prompt:
+
+        if st.session_state.soh_display is not None and any(
+            k in prompt.lower() for k in ["soh", "health", "battery", "condition"]
+        ):
+            soh_val = st.session_state.soh_display
+            full_prompt = f"The battery SOH is {soh_val:.2f}. {prompt}"
+        else:
+            full_prompt = prompt
+
+        reply = ask_gemini(full_prompt)
+
+        st.session_state.chat_history.append(("user", prompt))
+        st.session_state.chat_history.append(("assistant", reply))
+
+        st.session_state.last_prompt = prompt
+
+# Display Chat History
+for role, msg in st.session_state.chat_history:
+    if role == "user":
+        st.markdown(f"**🧑 You:** {msg}")
+    else:
+        st.markdown(f"**🤖 Assistant:** {msg}")
+
+
+# Clear Chat Memory
+if st.button("Clear Chat"):
+    st.session_state.chat_history = []
+    st.session_state.last_prompt = None
+    st.success("Chat cleared.")
+

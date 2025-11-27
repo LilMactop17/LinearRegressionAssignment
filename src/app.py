@@ -107,9 +107,9 @@ if st.button("Send") and prompt.strip():
 # Display Chat History
 for role, msg in st.session_state.chat_history:
     if role == "user":
-        st.markdown(f"**🧑 You:** {msg}")
+        st.markdown(f"** You:** {msg}")
     else:
-        st.markdown(f"**🤖 Assistant:** {msg}")
+        st.markdown(f"** Assistant:** {msg}")
 
 
 # Clear Chat Memory

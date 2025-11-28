@@ -15,3 +15,6 @@ env/
 # IDE
 .idea/
 .DS_Store
+
+# Gemini API KEY
+

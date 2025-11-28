@@ -12,102 +12,85 @@ from dotenv import load_dotenv
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-FILE_LOC = "src/DatasetSorted.xlsx"
+FILE_LOC = "src/Dataset.xlsx"
 
-if os.path.exists(FILE_LOC):
-    print("Dataset exists")
-
-SCALER_X = StandardScaler()
-MODEL_SOE = LinearRegression()
-MODEL_SOH = LinearRegression()
+SCALER = StandardScaler()
+MODEL = LinearRegression()
 
 def fetch_dataset():
     dataset = pd.read_excel(FILE_LOC)
     return dataset.to_numpy()
 
-def get_features_targets(dataset):
-    voltages = dataset[:, 8:28]
-    avg_voltage = voltages.mean(axis=1)
-    X = avg_voltage.reshape(-1, 1)
-    SOE = dataset[:, 7]
-    SOH = dataset[:, 29]
-    return X, SOE, SOH
+def get_values(dataset):
+    x = dataset[:, 8:28]
+    y = dataset[:, 29]
+    return x, y
 
-def eval_and_print(tag, y_true, y_pred, low_thresh=None):
+def fit_model(X_train, y_train, sample_weight=None):
+    MODEL.fit(X_train, y_train, sample_weight=sample_weight)
+
+dataset = fetch_dataset()
+x, y = get_values(dataset)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    x, y, test_size=0.2, random_state=42
+)
+
+X_train = SCALER.fit_transform(X_train)
+X_test  = SCALER.transform(X_test)
+
+MODEL_base = LinearRegression()
+MODEL_base.fit(X_train, y_train)
+y_pred_base = MODEL_base.predict(X_test)
+
+weights_train = np.where(y_train < 0.75, 4.0, 1.0)
+fit_model(X_train, y_train, weights_train)
+y_pred = MODEL.predict(X_test)
+
+def eval_and_print(tag, y_true, y_pred, low_thresh=0.75):
     mse = mean_squared_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
     print(f"\n[{tag}] Global:")
-    print(f"Mean Squared Error: {mse:.6f}")
-    print(f"R-squared: {r2:.6f}")
-    if low_thresh is not None:
-        low_idx = y_true <= low_thresh
-        if np.any(low_idx):
-            y_true_low = y_true[low_idx]
-            y_pred_low = y_pred[low_idx]
-            mae_low = mean_absolute_error(y_true_low, y_pred_low)
-            mse_low = mean_squared_error(y_true_low, y_pred_low)
-            r2_low = r2_score(y_true_low, y_pred_low)
-            p95_abs_err_low = np.percentile(np.abs(y_true_low - y_pred_low), 95)
-            print(f"\n[{tag}] Low-SOH (≤ {low_thresh}) subset:")
-            print(f"Count: {low_idx.sum()} / {len(y_true)}")
-            print(f"MAE_low: {mae_low:.6f}")
-            print(f"MSE_low: {mse_low:.6f}")
-            print(f"R2_low: {r2_low:.3f}")
-            print(f"P95 |y-ŷ| (low): {p95_abs_err_low:.6f}")
-        else:
-            print(f"\n[{tag}] No test samples with SOH ≤ {low_thresh}.")
+    print(f"MSE: {mse:.6f}")
+    print(f"R2:  {r2:.6f}")
 
-dataset = fetch_dataset()
-X, SOE, SOH = get_features_targets(dataset)
+    low_idx = y_true <= low_thresh
+    if np.any(low_idx):
+        y_true_low = y_true[low_idx]
+        y_pred_low = y_pred[low_idx]
+        mae_low = mean_absolute_error(y_true_low, y_pred_low)
+        mse_low = mean_squared_error(y_true_low, y_pred_low)
+        r2_low  = r2_score(y_true_low, y_pred_low)
+        p95_abs = np.percentile(np.abs(y_true_low - y_pred_low), 95)
+        print(f"\n[{tag}] Low-SOH subset:")
+        print(f"Count: {low_idx.sum()} / {len(y_true)}")
+        print(f"MAE_low: {mae_low:.6f}")
+        print(f"MSE_low: {mse_low:.6f}")
+        print(f"R2_low:  {r2_low:.3f}")
+        print(f"P95 |y-ŷ|: {p95_abs:.6f}")
 
-X_train, X_test, soe_train, soe_test, soh_train, soh_test = train_test_split(
-    X, SOE, SOH, test_size=0.2, random_state=42
-)
+eval_and_print("UNBALANCED", y_test, y_pred_base)
+eval_and_print("BALANCED",   y_test, y_pred)
 
-SCALER_X.fit(X_train)
-X_train_scaled = SCALER_X.transform(X_train)
-X_test_scaled = SCALER_X.transform(X_test)
+def predict_soh(inputs):
+    """
+    inputs: list of 20 voltages (3.0 to 4.2)
+    returns: SOH between 0 and 1
+    """
+    if len(inputs) != 20:
+        raise ValueError("Expected 20 voltage inputs")
 
-MODEL_SOE.fit(X_train_scaled, soe_train)
+    for v in inputs:
+        if v < 3.0 or v > 4.2:
+            raise ValueError("Voltage values must be between 3.0 and 4.2")
 
-SOE_REF = np.percentile(soe_train, 95)
-print("SOE_REF used for SOH normalization:", SOE_REF)
+    avg_voltage = np.mean(inputs)
 
-soe_pred_test = MODEL_SOE.predict(X_test_scaled)
-eval_and_print("Model 1 (avg V -> SOE)", soe_test, soe_pred_test)
+    soh = (avg_voltage - 3.0) / 1.2
 
-soe_train_reshaped = soe_train.reshape(-1, 1)
-soe_test_reshaped = soe_test.reshape(-1, 1)
-MODEL_SOH.fit(soe_train_reshaped, soh_train)
+    soh = float(np.clip(soh, 0.0, 1.0))
 
-soh_pred_from_true_soe = MODEL_SOH.predict(soe_test_reshaped)
-eval_and_print("Model 2 (true SOE -> SOH)", soh_test, soh_pred_from_true_soe, low_thresh=0.75)
-
-soe_pred_test_reshaped = soe_pred_test.reshape(-1, 1)
-soh_pred_pipeline = MODEL_SOH.predict(soe_pred_test_reshaped)
-eval_and_print("Pipeline (avg V -> SOE -> SOH)", soh_test, soh_pred_pipeline, low_thresh=0.75)
-
-SOE_MIN = soe_train.min()
-SOE_MAX = soe_train.max()
-SOH_MIN = 0.5
-SOH_MAX = 1.0
-
-def predict_soh_for_user_from_voltages(voltages_20):
-    try:
-        avg_v = float(np.mean(voltages_20))
-        X_input = np.array([[avg_v]])
-        X_scaled = SCALER_X.transform(X_input)
-        soe_pred = MODEL_SOE.predict(X_scaled)[0]
-        soe_norm = (soe_pred - SOE_MIN) / (SOE_MAX - SOE_MIN)
-        soe_norm = float(np.clip(soe_norm, 0.0, 1.0))
-        soh_est = SOH_MIN + soe_norm * (SOH_MAX - SOH_MIN)
-        status = "The battery is healthy." if soh_est >= 0.6 else "The battery has a problem."
-        return avg_v, soe_pred, soh_est, status
-    except Exception as e:
-        return None, None, None, f"Could not predict SOH: {e}"
-
-def generate_random_row(low, high):
-    return sorted(np.random.uniform(low, high, 20).tolist())
+    return soh
 
 chat_history = []
 
@@ -120,42 +103,3 @@ def ask_gemini(prompt):
         return response.text
     except Exception as e:
         return f"Gemini error: {e}"
-
-def augment_dataset(X, y, num_aug=5, noise_std=0.005):
-    X_aug = []
-    y_aug_out = []
-    for i in range(len(X)):
-        for _ in range(num_aug):
-            noise = np.random.normal(0, noise_std)
-            new_feature = X[i, 0] + noise
-            new_feature = np.clip(new_feature, 3.30, 3.95)
-            X_aug.append([new_feature])
-            y_aug_out.append(y[i])
-    return np.array(X_aug), np.array(y_aug_out)
-
-print("\nExample pipeline prediction using first row of dataset:")
-first_voltages = dataset[0, 8:28]
-print(predict_soh_for_user_from_voltages(first_voltages))
-
-print("SOE min/max/mean:", SOE.min(), SOE.max(), SOE.mean())
-print("SOH min/max/mean:", SOH.min(), SOH.max(), SOH.mean())
-
-avg_v_all = X.flatten()
-plt.scatter(avg_v_all, SOE, s=10)
-plt.xlabel("Average Voltage")
-plt.ylabel("SOE")
-plt.title("SOE vs Avg Voltage")
-plt.show()
-
-test_rows = []
-
-for _ in range(10):
-    base_low = np.random.uniform(3.45, 3.80)
-    base_high = base_low + np.random.uniform(0.05, 0.15)
-    row = generate_random_row(base_low, min(base_high, 3.95))
-    test_rows.append(row)
-
-print("=== 10 Random Test Rows ===")
-for i, row in enumerate(test_rows, 1):
-    result = predict_soh_for_user_from_voltages(row)
-    print(f"Test {i} → {result}")

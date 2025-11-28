@@ -17,5 +17,4 @@ env/
 .DS_Store
 
 # Gemini API KEY
-GEMINI_API_KEY=AIzaSyAmOyRJBsRv4MaCb-Y8jte2W4B5W9cp5sU
 
